@@ -20,9 +20,10 @@ class EnvironmentSettings:
     GRAVITY = 0.75
     SOLDIER_JUMP_STRENGTH = -13
     BULLET_FULL_DAMAGE = 25
+    PLAYER_BULLET_FULL_DAMAGE = 50
     BULLET_VELOCITY_X = 15
-    GRENADE_FULL_DAMAGE = 100
-    GRENADE_INNER_RADIUS = 50  # pixels from grenade
+    GRENADE_FULL_DAMAGE = 200
+    GRENADE_INNER_RADIUS = 75  # pixels from grenade
     GRENADE_OUTER_RADIUS = 200 # pixels from grenade
     GRENADE_VELOCITY_X = 7
     GRENADE_VELOCITY_Y = -11

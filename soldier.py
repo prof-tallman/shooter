@@ -176,7 +176,7 @@ class Soldier(pygame.sprite.Sprite):
             self.shoot_time = get_ticks()
             x = self.rect.centerx + (30 * self.direction) # 30 is hack
             y = self.rect.centery
-            return Bullet(x, y, self.direction)
+            return Bullet(x, y, self.direction, owner="player")
         else:
             return None
 
@@ -227,6 +227,17 @@ class Enemy(Soldier):
         self.vision = pygame.Rect(x, y, 450, 5)
         self.idling = False
         self.idling_counter = 0
+        
+    def shoot(self):
+        if (self.ammo > 0 
+                and get_ticks() > self.shoot_time + self.shoot_delay):
+            self.ammo -= 1
+            self.shoot_time = get_ticks()
+            x = self.rect.centerx + (30 * self.direction) # 30 is hack
+            y = self.rect.centery
+            return Bullet(x, y, self.direction, owner="enemy")
+        else:
+            return None
 
     def ai_move(self, world_map, tile_size, movement_limit=200):
         '''
@@ -306,3 +317,4 @@ class Player(Soldier):
         self.animations = Soldier.animations['player']
         self.shoot_delay = ENVIRONMENT.PLAYER_SHOOT_DELAY
         self.throw_delay = ENVIRONMENT.PLAYER_THROW_DELAY
+        self.safe_landing_speed = 17 #Highest speed player can land without taking damage.

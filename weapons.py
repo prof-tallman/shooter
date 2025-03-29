@@ -65,7 +65,7 @@ class Bullet(pygame.sprite.Sprite):
         # Bullets eventually go off the end of the level
         cls.remove_at_x = TILEMAP.COLS * TILEMAP.TILE_SIZE
 
-    def __init__(self, x, y, direction):
+    def __init__(self, x, y, direction, owner="player"):
         '''
         Initialize Bullet object; a weapon Soldiers shoot.
         '''                
@@ -74,8 +74,13 @@ class Bullet(pygame.sprite.Sprite):
             Bullet.load_assets()
 
         self.vel_x = ENVIRONMENT.BULLET_VELOCITY_X
-        self.damage = ENVIRONMENT.BULLET_FULL_DAMAGE
+        if owner == "player":
+            self.damage = ENVIRONMENT.PLAYER_BULLET_FULL_DAMAGE
+        else:    
+            self.damage = ENVIRONMENT.BULLET_FULL_DAMAGE
         self.direction = direction
+        self.owner = owner  #player or enemy
+        self.ricocheted = False
         self.image = Bullet.image
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
