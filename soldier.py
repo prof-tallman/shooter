@@ -3,7 +3,7 @@ import random
 import pygame
 from pygame.time import get_ticks
 from weapons import Bullet, Grenade
-from settings import Direction, Action, ENVIRONMENT, TILEMAP
+from settings import Direction, Action, CounterType, ENVIRONMENT, TILEMAP
 
 
 # All soldiers share these common animation types
@@ -55,10 +55,11 @@ class Soldier(pygame.sprite.Sprite):
         return animation_images
     
 
-    def __init__(self, x, y, kind, speed=3, health=100, ammo=20, grenades=5):
+    def __init__(self, x, y, kind='enemy', counter_type=CounterType.TIME_BASED,
+                 speed=3, health=100, ammo=20, grenades=5):
         '''
         Initializes a Soldier object by setting all the default values.
-        '''        
+        '''
         super().__init__()
         Soldier.load_assets(f'img/{kind}', kind)
 
@@ -82,11 +83,7 @@ class Soldier(pygame.sprite.Sprite):
         self.animations = Soldier.animations
         self.image = self.animations[kind][self.action][self.frame_idx]
         self.rect = self.image.get_rect()
-        self.animation_time = get_ticks()
-        self.shoot_time = self.animation_time
-        self.throw_time = self.animation_time
-        self.shoot_delay = ENVIRONMENT.SOLDIER_SHOOT_DELAY
-        self.throw_delay = ENVIRONMENT.SOLDIER_THROW_DELAY
+        self.counter_type = counter_type
 
         # Adjusts the rectangle to be slightly smaller than image so that the
         # player falls through tile gaps; otherwise the player float on air
@@ -95,6 +92,19 @@ class Soldier(pygame.sprite.Sprite):
         self.rect.width -= 6
         self.rect.height -= 2
         self.rect.center = (x, y)
+
+    def _advance_frame(self):
+        '''
+        Helper function to advance the soldier animation by one frame. The
+        responsibility for timing the animation is elsewhere.
+        '''
+        self.frame_idx += 1
+        # Animation rollover (except for the death sequence)
+        if self.frame_idx >= len(self.animations[self.action]):
+            if self.action == Action.DEATH:
+                self.frame_idx = len(self.animations[self.action]) - 1
+            else:
+                self.frame_idx = 0
 
     def update(self):
         '''
@@ -108,21 +118,26 @@ class Soldier(pygame.sprite.Sprite):
                       else Action.DEATH if not self.alive
                       else Action.IDLE)
         if new_action != self.action:
-            self.animation_time = get_ticks()
+            if self.counter_type == CounterType.TIME_BASED:
+                self.animation_time = get_ticks()
+            else:
+                self.animation_time = 0
             self.action = new_action
             self.frame_idx = 0
 
         # Update timed sequences like animation frames
-        if get_ticks() > self.animation_time + ENVIRONMENT.ANIMATION_DELAY:
-            self.animation_time = get_ticks()
-            self.frame_idx += 1
-            # Animation rollover (except for the death sequence)
-            if self.frame_idx >= len(self.animations[self.action]):
-                if self.action == Action.DEATH:
-                  self.frame_idx = len(self.animations[self.action]) - 1
-                else:
-                    self.frame_idx = 0
-        
+        if self.counter_type == CounterType.TIME_BASED:
+            if get_ticks() >= self.animation_time + ENVIRONMENT.ANIMATION_DELAY:
+                self.animation_time = get_ticks()
+                self._advance_frame()
+        else:
+            self.animation_time += 1
+            self.shoot_time += 1
+            self.throw_time += 1
+            if self.animation_time >= ENVIRONMENT.ANIMATION_COOLDOWN:
+                self.animation_time = 0
+                self._advance_frame()
+
         # Update the animation frame
         self.image = self.animations[self.action][self.frame_idx]
 
@@ -162,25 +177,49 @@ class Soldier(pygame.sprite.Sprite):
         self.vel_y = 0
         self.in_air = False
 
+    def _create_bullet(self):
+        '''
+        It's important that the bullet starts outside of the Soldier's rect
+        or the game engine will detect it as a suicide shot.
+        '''
+        self.ammo -= 1
+        x_offset = int(30 * self.direction) # 30 is hack
+        x = self.rect.centerx + x_offset
+        y = self.rect.centery
+        return Bullet(x, y, self.direction)
+
     def shoot(self):
         '''
         Shoots a bullet if the Soldier has one. This function calculates the 
         physical xy-location bullet and its direction of travel. The physics
         engine is responsible for calculating its movements.
-
-        It's important that the bullet starts outside of the Soldier's rect
-        or the game engine will detect it as a suicide shot.
         '''
 
-        if (self.ammo > 0 
-                and get_ticks() > self.shoot_time + self.shoot_delay):
-            self.ammo -= 1
-            self.shoot_time = get_ticks()
-            x = self.rect.centerx + (30 * self.direction) # 30 is hack
-            y = self.rect.centery
-            return Bullet(x, y, self.direction)
-        else:
-            return None
+        if self.ammo > 0:
+            if (self.counter_type == CounterType.TIME_BASED
+                    and get_ticks() > self.shoot_time + self.shoot_delay):
+                self.shoot_time = get_ticks()
+                return self._create_bullet()
+
+            elif (self.counter_type == CounterType.FRAME_BASED
+                    and self.shoot_time > self.shoot_delay):
+                self.shoot_time = 0
+                return self._create_bullet()
+        
+        # Don't shoot: not enough ammo or not enough delay
+        return None
+
+    def _create_grenade(self):
+        '''
+        Creates a grenade just outside the Soldier's rect. Since grenades
+        don't explode from collisions, the offsets are low importance.
+        '''
+        self.grenades -= 1
+        x_offset = int(20 * self.direction.value) # 20 is a hack
+        x = self.rect.centerx + x_offset
+        y = self.rect.top
+        return Grenade(x, y, self.direction)
+
 
     def throw(self):
         '''
@@ -188,16 +227,18 @@ class Soldier(pygame.sprite.Sprite):
         physical xy-location grenade and its direction of travel. The physics
         engine is responsible for calculating its movements.
         '''
-        if (self.grenades > 0 
-                and get_ticks() > self.throw_time + self.throw_delay):
-            self.grenades -= 1
-            self.throw_time = get_ticks()
-            x_offset = int(self.rect.size[0] * 0.2 * self.direction.value)
-            x = self.rect.centerx + x_offset
-            y = self.rect.top
-            return Grenade(x, y, self.direction)
-        else:
-            return None
+        if self.grenades > 0:
+            if (self.counter_type == CounterType.TIME_BASED
+                    and get_ticks() > self.throw_time + self.throw_delay):
+                self.throw_time = get_ticks()
+                return self._create_grenade()
+            elif (self.counter_type == CounterType.FRAME_BASED
+                    and self.throw_time > self.throw_delay):
+                self.throw_time = 0
+                return self._create_grenade()
+
+        # Don't throw: not enough grenades or not enough delay
+        return None
 
     def death(self):
         '''
@@ -218,17 +259,28 @@ class Soldier(pygame.sprite.Sprite):
 
 class Enemy(Soldier):
 
-    def __init__(self, x, y, speed=2, health=100, ammo=20, grenades=5):
+    def __init__(self, x, y, counter_type=CounterType.TIME_BASED,
+                 speed=2, health=100, ammo=20, grenades=5):
         '''
         Initializes an Enemy object by setting animation frames and delays.
-        '''        
-        super().__init__(x, y, 'enemy', speed, health, ammo, grenades)
+        '''
+        super().__init__(x, y, 'enemy', counter_type, 
+                         speed, health, ammo, grenades)
         self.animations = Soldier.animations['enemy']
-
         self.move_counter = 0
         self.vision = pygame.Rect(x, y, 450, 5)
         self.idling = False
         self.idling_counter = 0
+        if self.counter_type == CounterType.TIME_BASED:
+            self.animation_time = get_ticks()
+            self.shoot_delay = ENVIRONMENT.SOLDIER_SHOOT_DELAY
+            self.throw_delay = ENVIRONMENT.SOLDIER_THROW_DELAY
+        else:
+            self.animation_time = 0
+            self.shoot_delay = ENVIRONMENT.SOLDIER_SHOOT_COOLDOWN
+            self.throw_delay = ENVIRONMENT.SOLDIER_THROW_COOLDOWN
+        self.shoot_time = self.animation_time
+        self.throw_time = self.animation_time        
 
     def ai_move(self, world_map, tile_size, movement_limit=200):
         '''
@@ -272,7 +324,7 @@ class Enemy(Soldier):
             self.direction *= -1
             self.idling = True
             self.move_counter = 0
-            self.idling_counter = random.randint(25, 75)                
+            self.idling_counter = random.randint(25, 75)
         
         # Otherwise, move forward
         else:
@@ -300,11 +352,20 @@ class Player(Soldier):
     controlled by a special AI agent.
     '''
 
-    def __init__(self, x, y, speed=5, health=100, ammo=20, grenades=5):
+    def __init__(self, x, y, counter_type=CounterType.TIME_BASED,
+                 speed=5, health=100, ammo=20, grenades=5):
         '''
         Initializes a Player object by setting animation frames and delays.
         '''
-        super().__init__(x, y, 'player', speed, health, ammo, grenades)
+        super().__init__(x, y, 'player', counter_type, speed, health, ammo, grenades)
         self.animations = Soldier.animations['player']
-        self.shoot_delay = ENVIRONMENT.PLAYER_SHOOT_DELAY
-        self.throw_delay = ENVIRONMENT.PLAYER_THROW_DELAY
+        if counter_type == CounterType.TIME_BASED:
+            self.animation_time = get_ticks()
+            self.shoot_delay = ENVIRONMENT.PLAYER_SHOOT_DELAY
+            self.throw_delay = ENVIRONMENT.PLAYER_THROW_DELAY
+        else:
+            self.animation_time = 0
+            self.shoot_delay = ENVIRONMENT.PLAYER_SHOOT_COOLDOWN
+            self.throw_delay = ENVIRONMENT.PLAYER_THROW_COOLDOWN
+        self.shoot_time = self.animation_time
+        self.throw_time = self.animation_time

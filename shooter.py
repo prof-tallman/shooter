@@ -16,7 +16,7 @@ pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption('Shooter')
 screen = pygame.display.get_surface()
 controller = GameController()
-engine = GameEngine(screen)
+engine = GameEngine(screen, ai_agent=True)
 clock = pygame.time.Clock()
 
 

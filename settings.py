@@ -15,6 +15,10 @@ class GameModes(IntEnum):
     INTERACTIVE = 1
     QUIT = 2
 
+class CounterType(IntEnum):
+    FRAME_BASED = 0  # for AI agents who train in the background at ultraspeed
+    TIME_BASED = 1   # for humans who play the game interactively in real-time
+
 @dataclass(frozen=True)
 class EnvironmentSettings:
     GRAVITY = 0.75
@@ -26,13 +30,21 @@ class EnvironmentSettings:
     GRENADE_OUTER_RADIUS = 200 # pixels from grenade
     GRENADE_VELOCITY_X = 7
     GRENADE_VELOCITY_Y = -11
+    SOLDIER_SCALE = 1.65
+    # if using get_ticks
     GRENADE_FUSE_TIME = 1500
     PLAYER_SHOOT_DELAY = 200
     PLAYER_THROW_DELAY = 1500
     SOLDIER_SHOOT_DELAY = 500
     SOLDIER_THROW_DELAY = 2000
-    SOLDIER_SCALE = 1.65
     ANIMATION_DELAY = 100
+    # if using frame counter @ 60fps
+    GRENADE_COOLDOWN = 90
+    PLAYER_SHOOT_COOLDOWN = 12
+    PLAYER_THROW_COOLDOWN = 90
+    SOLDIER_SHOOT_COOLDOWN = 30
+    SOLDIER_THROW_COOLDOWN = 120
+    ANIMATION_COOLDOWN = 6
 
 # TODO: define TILE_SIZE from the image dimensions instead of hardcoded value
 @dataclass(frozen=True)

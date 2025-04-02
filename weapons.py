@@ -98,7 +98,6 @@ class Bullet(pygame.sprite.Sprite):
         screen.blit(self.image, (self.rect.x + camera_x, self.rect.y))
 
 
-
 class Grenade(pygame.sprite.Sprite):
     '''
     A weapon for Soldier objects to throw that cause splash damage.
@@ -113,7 +112,7 @@ class Grenade(pygame.sprite.Sprite):
         '''
         cls.image = pygame.image.load('img/icons/grenade.png').convert_alpha()
 
-    def __init__(self, x, y, direction):
+    def __init__(self, x, y, direction, time_based_fuse=False):
         '''
         Initialize Grenade object; a weapon thrown by soldiers.
         '''        
@@ -131,7 +130,11 @@ class Grenade(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
         self.direction = direction
-        self.throw_time = get_ticks()
+        self.time_based_fuse = time_based_fuse
+        if self.time_based_fuse:
+            self.throw_time = get_ticks()
+        else: # frame based animations for RL environments
+            self.throw_time = 0
         self.do_explosion = False
 
     def damage_at(self, pos_rect):
@@ -167,8 +170,13 @@ class Grenade(pygame.sprite.Sprite):
         '''
         Determines when the grade should explode.
         '''
-        if get_ticks() > self.throw_time + ENVIRONMENT.GRENADE_FUSE_TIME:
-            self.do_explosion = True
+        if self.time_based_fuse:
+            if get_ticks() >= self.throw_time + ENVIRONMENT.GRENADE_FUSE_TIME:
+                self.do_explosion = True
+        else: # frame based animations for RL environments
+            self.throw_time += 1
+            if self.throw_time >= ENVIRONMENT.GRENADE_COOLDOWN:
+                self.do_explosion = True
 
     def draw(self, screen, camera_x):
         '''
@@ -200,7 +208,7 @@ class Explosion(pygame.sprite.Sprite):
         cls.sound_fx = pygame.mixer.Sound('audio/grenade.wav')
         cls.sound_fx.set_volume(1)
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, time_based_fuse=False):
         '''
         Initialize Explosion object; an animation sequence for grenades.
         '''
@@ -214,20 +222,37 @@ class Explosion(pygame.sprite.Sprite):
         self.image = self.animations[self.frame_idx]
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        self.animation_time = get_ticks()
+        self.time_based_fuse = time_based_fuse
+        if self.time_based_fuse:
+            self.animation_time = get_ticks()
+        else: # frame based animations for RL environments
+            self.animation_time = 0
         Explosion.sound_fx.play()
+
+    def _advance_frame(self):
+        '''
+        Helper function to advance the explosion animation by one frame. The
+        responsibility for timing the animation is elsewhere.
+        '''
+        self.frame_idx += 1
+        if self.frame_idx >= len(self.animations):
+            self.kill()
+        else:
+            self.image = self.animations[self.frame_idx]
 
     def update(self):
         '''
         Updates the explosion animation sequence.
         '''
-        if get_ticks() > self.animation_time + ENVIRONMENT.ANIMATION_DELAY:
-            self.animation_time = get_ticks()
-            self.frame_idx += 1
-            if self.frame_idx >= len(self.animations):
-                self.kill()
-            else:
-                self.image = self.animations[self.frame_idx]
+        if self.time_based_fuse:
+            if get_ticks() >= self.animation_time + ENVIRONMENT.ANIMATION_DELAY:
+                self.animation_time = get_ticks()
+                self._advance_frame()
+        else: # frame based animations for RL environments
+            self.animation_time += 1
+            if self.animation_time >= ENVIRONMENT.ANIMATION_COOLDOWN:
+                self.animation_time = 0
+                self._advance_frame()
 
     def draw(self, screen, camera_x):
         '''

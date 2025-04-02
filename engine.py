@@ -7,10 +7,13 @@ from pygame.sprite import Group
 from pygame.image import load
 from pygame.draw import rect
 from os.path import exists
+from enum import IntEnum
 from soldier import Player, Enemy
-from weapons import ItemBox, Explosion
-from settings import (SCREEN_HEIGHT, SCREEN_WIDTH, SCROLL_RIGHT, SCROLL_LEFT,
-                      ENVIRONMENT, TILEMAP, COLOR, Direction, GameModes)
+from weapons import ItemBox, Grenade, Explosion
+from settings import (SCREEN_HEIGHT, SCREEN_WIDTH, 
+                      SCROLL_RIGHT, SCROLL_LEFT,
+                      ENVIRONMENT, TILEMAP, COLOR, 
+                      Direction, GameModes, CounterType)
 
 
 class GameEngine():
@@ -29,17 +32,28 @@ class GameEngine():
     tile_img_list = None
 
     @classmethod
-    def load_assets(cls, headless):
+    def load_assets(cls, render_gui=True):
         '''
         Preload sounds and background images into shared memory for reuse.
         '''
-        # Intialize background music
-        if not headless:
+
+        # Intialize background music if there's a human player
+        if render_gui:
             pygame.mixer.music.load('audio/music.mp3')
             pygame.mixer.music.set_volume(0.3)
             pygame.mixer.music.play(-1, 0.0, 2500)
 
-        # Load all of the background images
+        # Load all possible foreground tiles. Even if the game is being played
+        # by the AI in headless mode, we still need the images to build the
+        # proper size rectangles for all the sprites.
+        if cls.tile_img_list is None:
+            cls.tile_img_list = []
+            for tile_num in range(TILEMAP.TILE_TYPE_COUNT):
+                img = load(f'img/tile/{tile_num}.png').convert_alpha()
+                img = scale(img, (TILEMAP.TILE_SIZE, TILEMAP.TILE_SIZE))
+                cls.tile_img_list.append(img)
+
+        # Load all of the background images.
         if cls.bg_img is None:
             cls.bg_img = [
                 load('img/background/sky_cloud.png').convert_alpha(),
@@ -54,25 +68,23 @@ class GameEngine():
                 SCREEN_HEIGHT - cls.bg_img[1].get_height() - 200,
                 SCREEN_HEIGHT - cls.bg_img[2].get_height() - 150,
                 SCREEN_HEIGHT - cls.bg_img[3].get_height()
-            ]
-        
-        # Load all possible foreground tiles
-        if cls.tile_img_list is None:
-            cls.tile_img_list = []
-            for tile_num in range(TILEMAP.TILE_TYPE_COUNT):
-                img = load(f'img/tile/{tile_num}.png').convert_alpha()
-                img = scale(img, (TILEMAP.TILE_SIZE, TILEMAP.TILE_SIZE))
-                cls.tile_img_list.append(img)
+            ]       
 
-
-    def __init__(self, screen=None, game_mode=GameModes.MENU):
+    def __init__(self, screen=None, ai_agent=False, game_mode=GameModes.MENU):
         '''
         Creates a new world object.
         '''
+        if screen is None and not ai_agent:
+            raise ValueError(f'Interactive games require a screen object')
+
         self.game_mode = game_mode
         self.level = 1
+        if ai_agent: # AI trains and renders using frame-based counting
+            self.counter_type = CounterType.FRAME_BASED
+        else:        # humans play with time-based counting
+            self.counter_type = CounterType.TIME_BASED
         self.screen = screen
-        GameEngine.load_assets(True if screen is None else False)
+        GameEngine.load_assets(False if screen is None else True)
 
 
     def reset_world(self):
@@ -117,12 +129,12 @@ class GameEngine():
         
         # Only one ID per tile, so order doesn't matter so much
         elif tile == TILEMAP.PLAYER_TILE_ID:
-            self.player = Player(rect.x, rect.y)
+            self.player = Player(rect.x, rect.y, self.counter_type)
             self.health_bar = HealthBar(10, 10, self.player.max_health)
             self.ammo_bar = TextBar(10, 35, COLOR.WHITE)
             self.grenade_bar = TextBar(10, 60, COLOR.WHITE)
         elif tile == TILEMAP.ENEMY_TILE_ID:
-            enemy = Enemy(rect.x, rect.y)
+            enemy = Enemy(rect.x, rect.y, self.counter_type)
             self.groups['enemy'].add(enemy)
         elif tile == TILEMAP.AMMO_TILE_ID:
             item = ItemBox(rect.x, rect.y, 'ammo')
@@ -244,7 +256,8 @@ class GameEngine():
         # Animate with an explosion and calculate damage against all Soldiers
         for grenade in self.groups['grenade']:
             if grenade.do_explosion:
-                explosion = Explosion(grenade.rect.x, grenade.rect.y)
+                pos_x, pos_y = grenade.rect.x, grenade.rect.y,
+                explosion = Explosion(pos_x, pos_y, self.counter_type)
                 self.groups['explosion'].add(explosion)
                 self.player.health -= grenade.damage_at(self.player.rect)
                 for enemy in self.groups['enemy']:
