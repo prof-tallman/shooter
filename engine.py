@@ -85,6 +85,7 @@ class GameEngine():
         Creates a new world object.
         '''
 
+        # Cannot be time-based animations without a screen
         if time_based and screen is None:
             raise ValueError(f'Interactive games require a screen object')
        
@@ -99,11 +100,11 @@ class GameEngine():
         # AI trains without a screen (or sound effects)
         if screen is not None:
             self.screen = screen
-            self.play_sound_fx = True
+            self.sound_on = True
             GameEngine.load_assets(True)
         else:
             self.screen = None
-            self.play_sound_fx = False
+            self.sound_on = False
             GameEngine.load_assets(False)
         
         # Always start at level 1
@@ -208,24 +209,28 @@ class GameEngine():
                     self.load_game_tile(tile, idx_x, idx_y)
     
 
+    def play_sound(self, sound):
+        if self.sound_on:
+            sound.play()
+
+
     def player_actions(self, controller):
         '''
         Handles possible player actions based on the buttons that are pressed
         on the controller.
         '''
 
+        if controller.jump and not self.player.in_air:
+            self.play_sound(GameEngine.jump_sound_fx)
+
         # Ideally, this code would be within the Player class, but only the
         # game engine knows about the bullet and grenade groups.
         self.player.move(controller.mleft, controller.mright, controller.jump)
-        if controller.jump and not self.player.in_air:
-            if self.play_sound_fx:
-                GameEngine.jump_sound_fx.play()
         if controller.shoot:
             bullet = self.player.shoot()
             if bullet:
                 self.groups['bullet'].add(bullet)
-                if self.play_sound_fx:
-                    GameEngine.bullet_sound_fx.play()
+                self.play_sound(GameEngine.bullet_sound_fx)
         if controller.throw:
             grenade = self.player.throw()
             if grenade:
@@ -286,8 +291,7 @@ class GameEngine():
             if grenade.do_explosion:
                 pos_x, pos_y = grenade.rect.x, grenade.rect.y,
                 explosion = Explosion(pos_x, pos_y, self.counter_type)
-                if self.play_sound_fx:
-                    GameEngine.explosion_sound_fx.play()
+                self.play_sound(GameEngine.explosion_sound_fx)
                 self.groups['explosion'].add(explosion)
                 self.player.health -= grenade.damage_at(self.player.rect)
                 for enemy in self.groups['enemy']:

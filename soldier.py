@@ -1,6 +1,7 @@
 import os
 import random
 import pygame
+from pygame.sprite import Group
 from pygame.time import get_ticks
 from weapons import Bullet, Grenade
 from settings import Direction, Action, CounterType, ENVIRONMENT, TILEMAP
@@ -217,7 +218,7 @@ class Soldier(pygame.sprite.Sprite):
         # Don't shoot: not enough ammo or not enough delay
         return None
 
-    def _create_grenade(self):
+    def create_grenade(self):
         '''
         Creates a grenade just outside the Soldier's rect. Since grenades
         don't explode from collisions, the offsets are low importance.
@@ -235,18 +236,17 @@ class Soldier(pygame.sprite.Sprite):
         physical xy-location grenade and its direction of travel. The physics
         engine is responsible for calculating its movements.
         '''
+        grenade = None
         if self.grenades > 0:
             if (self.counter_type == CounterType.TIME_BASED
                     and get_ticks() > self.throw_time + self.throw_delay):
                 self.throw_time = get_ticks()
-                return self._create_grenade()
+                grenade = self.create_grenade()
             elif (self.counter_type == CounterType.FRAME_BASED
                     and self.throw_time > self.throw_delay):
                 self.throw_time = 0
-                return self._create_grenade()
-
-        # Don't throw: not enough grenades or not enough delay
-        return None
+                grenade = self.create_grenade()
+        return grenade
 
     def death(self):
         '''
