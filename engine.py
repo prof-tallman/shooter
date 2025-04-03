@@ -1,19 +1,19 @@
 
 import csv
 import pygame
+from pygame.mixer import Sound
 from pygame.sprite import spritecollide
 from pygame.transform import scale
 from pygame.sprite import Group
 from pygame.image import load
 from pygame.draw import rect
 from os.path import exists
-from enum import IntEnum
 from soldier import Player, Enemy
 from weapons import ItemBox, Grenade, Explosion
 from settings import (SCREEN_HEIGHT, SCREEN_WIDTH, 
                       SCROLL_RIGHT, SCROLL_LEFT,
                       ENVIRONMENT, TILEMAP, COLOR, 
-                      Direction, GameModes, CounterType)
+                      Direction, CounterType)
 
 
 class GameEngine():
@@ -30,18 +30,27 @@ class GameEngine():
     bg_ypos = None
     bg_width = 0
     tile_img_list = None
+    jump_sound_fx = None
+    bullet_sound_fx = None
+    explosion_sound_fx = None
 
     @classmethod
-    def load_assets(cls, render_gui=True):
+    def load_assets(cls, interactive_mode=True):
         '''
         Preload sounds and background images into shared memory for reuse.
         '''
 
         # Intialize background music if there's a human player
-        if render_gui:
+        if interactive_mode:
             pygame.mixer.music.load('audio/music.mp3')
             pygame.mixer.music.set_volume(0.3)
             pygame.mixer.music.play(-1, 0.0, 2500)
+            cls.jump_sound_fx = Sound('audio/jump.wav')
+            cls.jump_sound_fx.set_volume(0.5)
+            cls.bullet_sound_fx = Sound('audio/shot.wav')
+            cls.bullet_sound_fx.set_volume(0.4)
+            cls.explosion_sound_fx = Sound('audio/grenade.wav')
+            cls.explosion_sound_fx.set_volume(1)
 
         # Load all possible foreground tiles. Even if the game is being played
         # by the AI in headless mode, we still need the images to build the
@@ -70,21 +79,35 @@ class GameEngine():
                 SCREEN_HEIGHT - cls.bg_img[3].get_height()
             ]       
 
-    def __init__(self, screen=None, ai_agent=False, game_mode=GameModes.MENU):
+
+    def __init__(self, screen=None, time_based=False):
         '''
         Creates a new world object.
         '''
-        if screen is None and not ai_agent:
-            raise ValueError(f'Interactive games require a screen object')
 
-        self.game_mode = game_mode
-        self.level = 1
-        if ai_agent: # AI trains and renders using frame-based counting
-            self.counter_type = CounterType.FRAME_BASED
-        else:        # humans play with time-based counting
+        if time_based and screen is None:
+            raise ValueError(f'Interactive games require a screen object')
+       
+        # Humans play with time-based animation and cooldown timers
+        # AI trains and renders with frame-based animation and cooldown timers
+        if time_based:
             self.counter_type = CounterType.TIME_BASED
-        self.screen = screen
-        GameEngine.load_assets(False if screen is None else True)
+        else:
+            self.counter_type = CounterType.FRAME_BASED
+        
+        # Huamns play and AI renders with a screen (and sound effects)
+        # AI trains without a screen (or sound effects)
+        if screen is not None:
+            self.screen = screen
+            self.play_sound_fx = True
+            GameEngine.load_assets(True)
+        else:
+            self.screen = None
+            self.play_sound_fx = False
+            GameEngine.load_assets(False)
+        
+        # Always start at level 1
+        self.level = 1
 
 
     def reset_world(self):
@@ -157,9 +180,9 @@ class GameEngine():
         self.level += 1
         if exists(f'level{self.level}_data.csv'):
             self.load_current_level()
+            return True
         else:
-            print(f'Error: level {self.level} does not exist')
-            self.game_mode = GameModes.QUIT
+            return False
 
 
     def load_current_level(self) -> Player:
@@ -194,10 +217,15 @@ class GameEngine():
         # Ideally, this code would be within the Player class, but only the
         # game engine knows about the bullet and grenade groups.
         self.player.move(controller.mleft, controller.mright, controller.jump)
+        if controller.jump and not self.player.in_air:
+            if self.play_sound_fx:
+                GameEngine.jump_sound_fx.play()
         if controller.shoot:
             bullet = self.player.shoot()
             if bullet:
                 self.groups['bullet'].add(bullet)
+                if self.play_sound_fx:
+                    GameEngine.bullet_sound_fx.play()
         if controller.throw:
             grenade = self.player.throw()
             if grenade:
@@ -258,6 +286,8 @@ class GameEngine():
             if grenade.do_explosion:
                 pos_x, pos_y = grenade.rect.x, grenade.rect.y,
                 explosion = Explosion(pos_x, pos_y, self.counter_type)
+                if self.play_sound_fx:
+                    GameEngine.explosion_sound_fx.play()
                 self.groups['explosion'].add(explosion)
                 self.player.health -= grenade.damage_at(self.player.rect)
                 for enemy in self.groups['enemy']:

@@ -11,7 +11,6 @@ class ItemBox(pygame.sprite.Sprite):
     Supplies for the player to collect with ammo, grenades, or health.
     '''
     images = None
-    sound_fx = None    
 
     @classmethod
     def load_assets(cls):
@@ -29,7 +28,7 @@ class ItemBox(pygame.sprite.Sprite):
         Initializes an ItemBox based on the box type
         '''
         super().__init__()
-        if not ItemBox.images or not ItemBox.sound_fx:
+        if not ItemBox.images:
             ItemBox.load_assets()
 
         self.box_type = box_type
@@ -50,7 +49,6 @@ class Bullet(pygame.sprite.Sprite):
     Bullets for the Soldier to shoot.
     '''
     image = None
-    sound_fx = None    
 
     @classmethod
     def load_assets(cls):
@@ -59,8 +57,6 @@ class Bullet(pygame.sprite.Sprite):
         '''
         # Load media from disk into shared memory for each instance to copy
         cls.image = pygame.image.load('img/icons/bullet.png').convert_alpha()
-        cls.sound_fx = pygame.mixer.Sound('audio/shot.wav')
-        cls.sound_fx.set_volume(0.4)
 
         # Bullets eventually go off the end of the level
         cls.remove_at_x = TILEMAP.COLS * TILEMAP.TILE_SIZE
@@ -70,7 +66,7 @@ class Bullet(pygame.sprite.Sprite):
         Initialize Bullet object; a weapon Soldiers shoot.
         '''                
         super().__init__()
-        if not Bullet.image or not Bullet.sound_fx:
+        if not Bullet.image:
             Bullet.load_assets()
 
         self.vel_x = ENVIRONMENT.BULLET_VELOCITY_X
@@ -79,7 +75,7 @@ class Bullet(pygame.sprite.Sprite):
         self.image = Bullet.image
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        Bullet.sound_fx.play()
+        #Bullet.sound_fx.play() moved to Game Engine
 
     def update(self):
         '''
@@ -103,7 +99,6 @@ class Grenade(pygame.sprite.Sprite):
     A weapon for Soldier objects to throw that cause splash damage.
     '''
     image = None
-    sound_fx = None    
 
     @classmethod
     def load_assets(cls):
@@ -117,7 +112,7 @@ class Grenade(pygame.sprite.Sprite):
         Initialize Grenade object; a weapon thrown by soldiers.
         '''        
         super().__init__()
-        if not Grenade.image or not Grenade.sound_fx:
+        if not Grenade.image:
             Grenade.load_assets()
 
         self.in_air = True
@@ -190,7 +185,6 @@ class Explosion(pygame.sprite.Sprite):
     Animation sequence object for an exploding grenade.
     '''
     animations = None
-    sound_fx = None    
 
     @classmethod
     def load_assets(cls):
@@ -205,15 +199,13 @@ class Explosion(pygame.sprite.Sprite):
             new_height = int(img.get_height() * 2)
             img = pygame.transform.scale(img, (new_width, new_height))
             cls.animations.append(img.convert_alpha())
-        cls.sound_fx = pygame.mixer.Sound('audio/grenade.wav')
-        cls.sound_fx.set_volume(1)
 
     def __init__(self, x, y, time_based_fuse=False):
         '''
         Initialize Explosion object; an animation sequence for grenades.
         '''
         super().__init__()
-        if not Explosion.animations or not Explosion.sound_fx:
+        if not Explosion.animations:
             Explosion.load_assets()
 
         self.frame_idx = 0
@@ -227,7 +219,7 @@ class Explosion(pygame.sprite.Sprite):
             self.animation_time = get_ticks()
         else: # frame based animations for RL environments
             self.animation_time = 0
-        Explosion.sound_fx.play()
+        #Explosion.sound_fx.play() # Moved to Game Engine
 
     def _advance_frame(self):
         '''

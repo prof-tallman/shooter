@@ -15,28 +15,28 @@ class Soldier(pygame.sprite.Sprite):
     '''
 
     animations = {}
-    jump_fx = None
+    #jump_fx = None
 
     @classmethod
-    def load_assets(cls, base_dirpath, soldier_type):
+    def load_assets(cls, base_dirpath, soldier_type, interactive_mode):
         '''
         Preload animations and sounds into shared memory for reuse.
         '''
         if soldier_type not in cls.animations:
             cls.animations[soldier_type] = cls._load_animations(base_dirpath)
             
-        if cls.jump_fx is None:
-            cls.jump_fx = pygame.mixer.Sound('audio/jump.wav')
-            cls.jump_fx.set_volume(0.5)
+        #if interactive_mode and cls.jump_fx is None:
+        #    cls.jump_fx = pygame.mixer.Sound('audio/jump.wav')
+        #    cls.jump_fx.set_volume(0.5)
 
     @staticmethod
     def _load_animations(base_dirpath):
         '''
-        Generates an ordered list of animation frames containing every image 
-        within a file directory. There are four different animation types, each
-        in an appropriately named subdirectory: 'Idle', 'Run', 'Jump', and
-        'Death'. The images must be named 1.png, 2.png, 3.png, etc. There is no
-        restriction on the number of images in the animation sequence.
+        Generates an ordered list of animation frames that contains every image
+        within the file directory. There are four different animation types and
+        each is in an appropriately named subdirectory: 'Idle', 'Run', 'Jump',
+        and 'Death'. The images must be named 1.png, 2.png, 3.png, etc. There
+        is no restriction on the number of images in the animation sequence.
         '''
 
         animation_images = []
@@ -55,13 +55,13 @@ class Soldier(pygame.sprite.Sprite):
         return animation_images
     
 
-    def __init__(self, x, y, kind='enemy', counter_type=CounterType.TIME_BASED,
+    def __init__(self, x, y, kind='enemy', interactive_mode=True,
                  speed=3, health=100, ammo=20, grenades=5):
         '''
         Initializes a Soldier object by setting all the default values.
         '''
         super().__init__()
-        Soldier.load_assets(f'img/{kind}', kind)
+        Soldier.load_assets(f'img/{kind}', kind, interactive_mode)
 
         self.alive = True
         self.health = health
@@ -83,7 +83,14 @@ class Soldier(pygame.sprite.Sprite):
         self.animations = Soldier.animations
         self.image = self.animations[kind][self.action][self.frame_idx]
         self.rect = self.image.get_rect()
-        self.counter_type = counter_type
+
+        # Interactive games use the clock for timing whereas headless games
+        # use a frame counter. This is to account for AI agent training which
+        # runs the game at much faster speeds than real-time.
+        if interactive_mode:
+            self.counter_type = counter_type=CounterType.TIME_BASED
+        else:
+            self.counter_type = counter_type=CounterType.FRAME_BASED
 
         # Adjusts the rectangle to be slightly smaller than image so that the
         # player falls through tile gaps; otherwise the player float on air
@@ -154,7 +161,8 @@ class Soldier(pygame.sprite.Sprite):
 
         # Handle vertical movement
         if jump_cmd and not self.in_air:
-            Soldier.jump_fx.play()
+            #if self.counter_type == CounterType.TIME_BASED:
+                #Soldier.jump_fx.play()
             self.vel_y = ENVIRONMENT.SOLDIER_JUMP_STRENGTH
             self.in_air = True
 
