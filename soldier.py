@@ -69,9 +69,9 @@ class Soldier(pygame.sprite.Sprite):
         self.speed = speed
         self.ammo = ammo
         self.grenades = grenades
-        self.max_ammo = ammo * 2
-        self.max_grenades = grenades * 2
-        self.max_health = health
+        self.max_ammo = ENVIRONMENT.MAX_AMMO
+        self.max_grenades = ENVIRONMENT.MAX_GRENADES
+        self.max_health = ENVIRONMENT.MAX_HEALTH
         self.direction = Direction.RIGHT
         self.vel_y = 0
         self.vel_x = 0
